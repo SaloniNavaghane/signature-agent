@@ -4,7 +4,14 @@ import numpy as np
 import tempfile
 import os
 
-app = FastAPI()
+app = FastAPI(
+    title="Signature API",
+    servers=[
+        {
+            "url": "https://signature-agent-production.up.railway.app"
+        }
+    ]
+)
 
 orb = cv2.ORB_create(nfeatures=2000)
 
