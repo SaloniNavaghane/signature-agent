@@ -39,7 +39,7 @@ async def compare_signature(test: UploadFile = File(...)):
     # Dummy AI logic (replace later)
     mean_value = img.mean()
 
-    if mean_value > 5m,kjn:
+    if mean_value > 5:
         result = "Genuine Signature"
     else:
         result = "Forged Signature"
