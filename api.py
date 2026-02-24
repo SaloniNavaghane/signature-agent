@@ -1,82 +1,78 @@
-from fastapi import FastAPI, UploadFile, File
-import cv2
+from fastapi import FastAPI, UploadFile, File, Request
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
 import numpy as np
-import tempfile
-import os
+import cv2
 
-app = FastAPI(
-    title="Signature API",
-    servers=[
-        {
-            "url": "https://signature-agent-production.up.railway.app"
-        }
-    ]
+app = FastAPI(title="Signature Verification API")
+
+# ✅ Allow Copilot / Browser / Streamlit calls
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-orb = cv2.ORB_create(nfeatures=2000)
+# ----------------------------------------------------
+# 🔥 HEALTH CHECK (Important for Railway)
+# ----------------------------------------------------
+@app.get("/")
+def home():
+    return {"status": "Signature API Running"}
 
-GENUINE_FOLDER = "data/genuine"
-
-def get_orb_features(image):
-    image = cv2.resize(image,(400,200))
-    kp, des = orb.detectAndCompute(image,None)
-    return des
-
-def match_score(des1, des2):
-
-    if des1 is None or des2 is None:
-        return 0
-
-    bf = cv2.BFMatcher(cv2.NORM_HAMMING)
-
-    matches = bf.knnMatch(des1,des2,k=2)
-
-    good = []
-
-    for m,n in matches:
-        if m.distance < 0.75*n.distance:
-            good.append(m)
-
-    return len(good)
-
+# ----------------------------------------------------
+# ⭐ MAIN ENDPOINT FOR COPILOT + STREAMLIT
+# Accept BOTH:
+#   file = Streamlit
+#   test = Copilot Studio connector
+# ----------------------------------------------------
 @app.post("/compare")
-async def compare_signature(test: UploadFile = File(...)):
+async def compare_signature(
+    request: Request,
+    file: UploadFile = File(None),
+    test: UploadFile = File(None)
+):
+    try:
+        # ✅ Accept either input name
+        uploaded = file if file is not None else test
 
-    # save test image
-    contents = await test.read()
-    with tempfile.NamedTemporaryFile(delete=False) as tmp:
-        tmp.write(contents)
-        path = tmp.name
+        if uploaded is None:
+            return {"error": "No file received"}
 
-    test_img = cv2.imread(path,0)
-    test_des = get_orb_features(test_img)
+        # read image bytes
+        contents = await uploaded.read()
 
-    scores = []
+        # ------------------------------------------------
+        # 🔥 SIMPLE DEMO PREDICTION LOGIC
+        # Replace this with your ML model later
+        # ------------------------------------------------
+        np_arr = np.frombuffer(contents, np.uint8)
+        img = cv2.imdecode(np_arr, cv2.IMREAD_GRAYSCALE)
 
-    # ⭐ compare with ALL genuine signatures
-    for file in os.listdir(GENUINE_FOLDER):
+        if img is None:
+            return {"error": "Invalid image"}
 
-        g_img = cv2.imread(f"{GENUINE_FOLDER}/{file}",0)
-        g_des = get_orb_features(g_img)
+        # Dummy logic just for demo
+        mean_value = img.mean()
 
-        s = match_score(g_des,test_des)
-        scores.append(s)
+        if mean_value > 5:
+            result = "Genuine Signature"
+        else:
+            result = "Forged Signature"
 
-    avg_score = np.mean(scores)
+        return {
+            "status": "success",
+            "prediction": result,
+            "confidence": float(mean_value)
+        }
 
-    # ⭐ REALISTIC THRESHOLD
-    if avg_score > 5:
-        result = "Genuine"
-    else:
-        result = "Forged"
+    except Exception as e:
+        return {"error": str(e)}
 
-    return {
-        "result": result,
-        "avg_score": float(avg_score)
-    }
-
-
+# ----------------------------------------------------
+# ⭐ LOCAL RUN
+# ----------------------------------------------------
 if __name__ == "__main__":
-    import uvicorn
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
