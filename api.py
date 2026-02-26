@@ -6,7 +6,6 @@ import cv2
 
 app = FastAPI(title="Signature Verification API")
 
-# allow Copilot / browser
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,16 +14,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# -------------------------------------------------
-# Health check
-# -------------------------------------------------
 @app.get("/")
 def home():
     return {"status": "API Running"}
 
-# -------------------------------------------------
-# ⭐ ONLY ONE FILE INPUT (test)
-# -------------------------------------------------
 @app.post("/compare")
 async def compare_signature(test: UploadFile = File(...)):
 
@@ -36,17 +29,18 @@ async def compare_signature(test: UploadFile = File(...)):
     if img is None:
         return {"error": "Invalid image"}
 
-    # Dummy AI logic (replace later)
     mean_value = img.mean()
 
-    if mean_value > 5:
+    if mean_value > 120:
         result = "Genuine Signature"
     else:
         result = "Forged Signature"
 
+    confidence_percent = round((mean_value / 255) * 100, 2)
+
     return {
         "prediction": result,
-        "confidence": float(mean_value)
+        "confidence": f"{confidence_percent}%"
     }
 
 if __name__ == "__main__":
